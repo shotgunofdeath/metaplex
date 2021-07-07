@@ -31,12 +31,9 @@ import {
   PriceFloor,
   PriceFloorType,
   IPartialCreateAuctionArgs,
+  MetadataKey,
 } from '@oyster/common';
-import {
-  Connection,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-} from '@solana/web3.js';
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { MintLayout } from '@solana/spl-token';
 import { useHistory, useParams } from 'react-router-dom';
 import { capitalize } from 'lodash';
@@ -193,7 +190,7 @@ export const AuctionCreateView = () => {
       // In these cases there is only ever one item in the array.
 
       let winningConfigs: WinningConfig[];
-      if (attributes.category === AuctionCategory.Single)
+      if (attributes.category === AuctionCategory.Single) {
         winningConfigs = [
           new WinningConfig({
             items: [
@@ -210,7 +207,7 @@ export const AuctionCreateView = () => {
             ],
           }),
         ];
-      else {
+      } else {
         winningConfigs = [];
         for (let i = 0; i < (attributes.editions || 1); i++) {
           winningConfigs.push(
@@ -219,7 +216,11 @@ export const AuctionCreateView = () => {
                 new WinningConfigItem({
                   safetyDepositBoxIndex: 0,
                   amount: 1,
-                  winningConfigType: WinningConfigType.Printing,
+                  winningConfigType:
+                    attributes.items[0].masterEdition?.info.key ==
+                    MetadataKey.MasterEditionV1
+                      ? WinningConfigType.PrintingV1
+                      : WinningConfigType.PrintingV2,
                 }),
               ],
             }),
@@ -1369,26 +1370,34 @@ const TierTableStep = (props: {
 
                     const newTiers = newImmutableTiers(props.attributes.tiers);
                     if (items[0]) {
-                      const existing = props.attributes.items.find(
-                        it =>
-                          it.metadata.pubkey.toBase58() ===
-                          items[0].metadata.pubkey.toBase58(),
+                      const existing = props.attributes.items.find(it =>
+                        it.metadata.pubkey.equals(items[0].metadata.pubkey),
                       );
                       if (!existing) newItems.push(items[0]);
-                      const index = newItems.findIndex(
-                        it =>
-                          it.metadata.pubkey.toBase58() ===
-                          items[0].metadata.pubkey.toBase58(),
+                      const index = newItems.findIndex(it =>
+                        it.metadata.pubkey.equals(items[0].metadata.pubkey),
                       );
 
                       const myNewTier = newTiers[configIndex].items[itemIndex];
                       myNewTier.safetyDepositBoxIndex = index;
-                      if (items[0].masterEdition)
+                      if (
+                        items[0].masterEdition &&
+                        items[0].masterEdition.info.key ==
+                          MetadataKey.MasterEditionV1
+                      ) {
                         myNewTier.winningConfigType =
-                          WinningConfigType.Printing;
-                      else
+                          WinningConfigType.PrintingV1;
+                      } else if (
+                        items[0].masterEdition &&
+                        items[0].masterEdition.info.key ==
+                          MetadataKey.MasterEditionV2
+                      ) {
+                        myNewTier.winningConfigType =
+                          WinningConfigType.PrintingV2;
+                      } else {
                         myNewTier.winningConfigType =
                           WinningConfigType.TokenOnlyTransfer;
+                      }
                       myNewTier.amount = 1;
                     } else if (
                       (i as WinningConfigItem).safetyDepositBoxIndex !==
@@ -1451,6 +1460,17 @@ const TierTableStep = (props: {
                         const myNewTier =
                           newTiers[configIndex].items[itemIndex];
 
+                        // Legacy hack...
+                        if (
+                          value == WinningConfigType.PrintingV2 &&
+                          myNewTier.safetyDepositBoxIndex &&
+                          props.attributes.items[
+                            myNewTier.safetyDepositBoxIndex
+                          ].masterEdition?.info.key ==
+                            MetadataKey.MasterEditionV1
+                        ) {
+                          value = WinningConfigType.PrintingV1;
+                        }
                         myNewTier.winningConfigType = value;
                         props.setAttributes({
                           ...props.attributes,
@@ -1464,13 +1484,15 @@ const TierTableStep = (props: {
                       <Option value={WinningConfigType.TokenOnlyTransfer}>
                         Token Only Transfer
                       </Option>
-                      <Option value={WinningConfigType.Printing}>
+                      <Option value={WinningConfigType.PrintingV2}>
                         Printing
                       </Option>
                     </Select>
 
-                    {(i as WinningConfigItem).winningConfigType ===
-                      WinningConfigType.Printing && (
+                    {((i as WinningConfigItem).winningConfigType ===
+                      WinningConfigType.PrintingV1 ||
+                      (i as WinningConfigItem).winningConfigType ===
+                        WinningConfigType.PrintingV2) && (
                       <label className="action-field">
                         <span className="field-title">
                           How many copies do you want to create for each winner?
