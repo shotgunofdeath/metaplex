@@ -192,7 +192,7 @@ export const AuctionCard = ({
               setLoading(true);
               setShowRedemptionIssue(false);
               try {
-                if (eligibleForAnything)
+                if (eligibleForAnything) {
                   await sendRedeemBid(
                     connection,
                     wallet,
@@ -201,7 +201,7 @@ export const AuctionCard = ({
                     accountByMint,
                     prizeTrackingTickets,
                   ).then(() => setShowRedeemedBidModal(true));
-                else
+                } else {
                   await sendCancelBid(
                     connection,
                     wallet,
@@ -209,6 +209,7 @@ export const AuctionCard = ({
                     auctionView,
                     accountByMint,
                   );
+                }
               } catch (e) {
                 console.error(e);
                 setShowRedemptionIssue(true);
